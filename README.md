@@ -149,6 +149,19 @@ agent_project/
 - Memory is used cautiously and not blindly reused, especially for time-sensitive queries.
 - Built as a learning project to explore LLM-based agent design and real-world limitations.
 
+## Setup 
+-## Setup Requirements
+
+- Python 3.x  
+- Ollama installed and running locally  
+
+Run the following before starting the agent:
+existing ollama run gemma3:4b
+
+ollama run model name
+
+make sure you change the model name in the command and also the llm function calls
+
 ---
 
 ## Future Improvements
