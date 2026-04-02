@@ -1,8 +1,7 @@
+requests
+beautifulsoup4
+duckduckgo-search
+python-dotenv
+streamlit
 fastapi
 uvicorn
-streamlit
-requests
-pydantic
-sqlalchemy
-python-dotenv
-openai
