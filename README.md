@@ -150,7 +150,7 @@ agent_project/
 - Built as a learning project to explore LLM-based agent design and real-world limitations.
 
 ## Setup 
--## Setup Requirements
+# Setup Requirements
 
 - Python 3.x  
 - Ollama installed and running locally  
@@ -163,6 +163,23 @@ ollama run model name
 make sure you change the model name in the command and also the llm function calls
 
 ---
+## Running the Project
+
+### CLI Mode (Recommended)
+python cli_test.py
+
+---
+### Streamlit UI (Requires Backend)
+
+Step 1: Start FastAPI backend
+uvicorn main:app --reload
+
+Step 2: Start Streamlit UI
+streamlit run app.py
+
+---
+Note:
+The Streamlit interface depends on the FastAPI backend being active.
 
 ## Future Improvements
 
