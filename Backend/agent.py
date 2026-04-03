@@ -17,6 +17,8 @@ class Agent:
 
     def run(self, input):
         # input validation
+        retry_count = 0
+        max_retries = 2
         clean = input.strip()
 
         if not clean:
@@ -48,8 +50,17 @@ class Agent:
             action = decision["action"]
             tool_input = decision["input"]
 
+            
+            if action in ["calculator", "final_answer"]:
+                is_complete = self.is_query_complete(input, scratchpad)
+
+                if not is_complete:
+                    print("Incomplete data — forcing more search")
+                    action = "web_search"
+                    tool_input = input
+
             if tool_input in self.failed_queries:
-                print("⚠️ Skipping repeated failed query")
+                print("Skipping repeated failed query")
                 continue
 
             if action == "final_answer":
@@ -71,8 +82,18 @@ class Agent:
                 
                 print("Displaying Tool Result:",result)
 
+
             #storing the observation of the current step
-            bad_signals = ["No useful information found.", "Access Denied"]
+            #bad_signals = ["No useful information found.", "Access Denied"]
+            print("Checking the usefulness of the tools..")
+            if action == "calculator":
+                is_useful = True
+
+            elif action == "web_search":
+                is_useful = self.is_useful_result(tool_input, result)
+
+            else:
+                is_useful = False
 
 
             observation = f"""
@@ -80,11 +101,22 @@ Step:
 - Action: {action}
 - Input: {tool_input}
 - Result: {result}
-- Status: {"not useful" if any(bad in result for bad in bad_signals) else "useful"}
+- Status: {"useful" if is_useful else "not useful"}
 """
             #checking for failed query if any from observation
-            if "not useful" in observation:
+            if not is_useful:
+                print("The current query didn't give a useful answer.")
                 self.failed_queries.add(tool_input)
+
+                if retry_count < max_retries:
+                    improved_query = self.generate_better_query(input, scratchpad)
+
+                    print("Retrying with improved query:", improved_query)
+
+                    input = improved_query   # feed back into loop
+                    retry_count += 1
+                    continue
+
             #updating the scratchpad memory and printing
             scratchpad +=observation
             print("Scratchpad memory:", scratchpad)
@@ -169,10 +201,22 @@ Guidelines:
 10. EFFICIENCY:
    - Avoid repeating failed queries
    - Try improved queries instead
+11. PERCENTAGE RULE (CRITICAL):
+- When calculating percentage of A relative to B:
+  → Use: (A / B) * 100
 
+- Carefully identify:
+  → A = part
+  → B = whole
+
+- Example:
+  "What % of Canada is Iceland?"
+  → (Iceland / Canada) * 100
+
+- NEVER reverse numerator and denominator
 ----
 
-🔥 History Usage Rules:
+ History Usage Rules:
 
 - Carefully check "Previous steps" before deciding
 - If the answer can be directly obtained from previous steps → use "final_answer"
@@ -406,7 +450,7 @@ RETURN ONLY THE FINAL ANSWER
     def get_time_for_location(self, query):
         query = query.lower()
 
-        tz = None  # 🔥 always initialize
+        tz = None  # always initialize
 
         # basic mapping
         if "hyderabad" in query or "india" in query:
@@ -418,7 +462,7 @@ RETURN ONLY THE FINAL ANSWER
         elif "new york" in query or "usa" in query:
             tz = pytz.timezone("America/New_York")
 
-        # 🔥 fallback if unknown location
+        # fallback if unknown location
         if tz is None:
             print("tz is none, heading back to the agent")
             return None
@@ -466,3 +510,81 @@ RETURN ONLY THE FINAL ANSWER
                         continue
 
         return True  # fallback
+    
+    def is_useful_result(self, query, result):
+        print("Checking whether the result is useful or not...")
+        prompt = f"""
+User query:
+{query}
+
+Result:
+{result}
+
+Does this result directly and completely answer the query?
+
+Rules:
+- Must answer ALL parts of the query
+- Must be specific (no vague words like "soon", "upcoming")
+- Must not be generic or partial
+
+Respond ONLY with:
+YES or NO
+"""
+
+        response = ollama.chat(
+        model="gemma3:4b",
+        messages=[{"role": "user", "content": prompt}],
+        options={"temperature": 0}
+    )
+        return "YES" in response["message"]["content"].upper()
+
+
+    def generate_better_query(self, query, scratchpad):
+        print("Refining input query...")
+        prompt = f"""
+The previous search did not return a useful result.
+
+Original query:
+{query}
+
+Previous steps:
+{scratchpad}
+
+Generate a better, more specific search query.
+Only output the improved query.
+"""
+
+        response = ollama.chat(
+        model="gemma3:4b",
+        messages=[{"role": "user", "content": prompt}],
+        options={"temperature": 0.3}
+    )
+        return response["message"]["content"].strip()
+
+    def is_query_complete(self, query, scratchpad):
+        print("Checking whether the all the questions in the query been answered..")
+        prompt = f"""
+User query:
+{query}
+
+Current known information:
+{scratchpad}
+
+Check if ALL required information to answer the query is present.
+
+Rules:
+- Identify all entities and required values in the query
+- Check if each one is present in the scratchpad
+- If ANY required piece is missing → answer NO
+- Only answer YES if everything needed is available
+
+Respond ONLY with:
+YES or NO
+"""
+
+        response = ollama.chat(
+        model="gemma3:4b",
+        messages=[{"role": "user", "content": prompt}],
+        options={"temperature": 0}
+    )
+        return response["message"]["content"].strip().upper().startswith("YES")

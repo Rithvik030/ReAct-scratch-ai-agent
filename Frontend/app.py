@@ -1,9 +1,9 @@
 import streamlit as st
 import requests
 
-st.title("Autonomous Research Agent")
+st.title("My Agent")
 
-query = st.text_input("Enter your question")
+query = st.text_input("Enter your question here")
 
 if st.button("Run Agent"):
     response = requests.post(
