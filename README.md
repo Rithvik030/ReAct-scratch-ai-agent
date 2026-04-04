@@ -42,7 +42,7 @@ This enables:
 
 ## How It Works
 
-
+```bash
 User Query
 ↓
 Decide Action (LLM)
@@ -59,6 +59,7 @@ Retry (if needed)
 ↓
 Final Answer
 
+```
 
 ---
 
@@ -105,20 +106,24 @@ If results are not useful:
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
-
+```bash
 agent_project/
-
+│
 ├── Backend/
-│ ├── agent.py
-│ ├── tools/
-│ └── ...
+│   ├── agent.py
+│   └── tools/
+│       ├── web_search.py
+│       └── calculator.py
+│
 ├── Frontend/
-│ └── app.py
+│   └── app.py
+│
 ├── cli_test.py
 ├── README.md
 └── requirements.txt
+```
 
 
 ---
@@ -141,7 +146,9 @@ agent_project/
 
 Run:
 
-ollama run gemma3:4b
+ollama run <model_name>
+
+Replace `<model_name>` with any model available in your Ollama setup.
 
 
 ---
