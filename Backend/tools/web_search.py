@@ -1,6 +1,6 @@
-'''from ddgs import DDGS
+from ddgs import DDGS
 import requests
-from bs4 import BeautifulSoup'''
+from bs4 import BeautifulSoup
 
 
 def fetch_page_content(url):
@@ -27,105 +27,6 @@ def fetch_page_content(url):
         return ""
 
 
-
-'''
-def score_result(r, query):
-    print("Assigning scores to the websites....")
-    score = 0
-
-    url = r.get("href") or r.get("link") or ""
-    text = (r.get("title", "") + " " + r.get("body", "")).lower()
-
-    # ✅ domain trust (soft boost)
-    if any(site in url for site in ["espn", "livescore", "premierleague"]):
-        score += 3
-    
-    if "sofascore" in url:
-        score -= 3
-
-    # ✅ keyword match
-    for word in query.lower().split():
-        if word in text:
-            score += 1
-
-    # ✅ contains numbers (dates, scores)
-    if any(char.isdigit() for char in text):
-        score += 2
-
-    return score
-    
-
-def web_search(query):
-    print("Performing 1st version websearch: ")
-    results = []
-
-    with DDGS() as ddgs:
-        results = ddgs.text(query, max_results=5)
-        processed_results = []
-
-        for r in results[:2]: # top 2 only
-            print("Fetching:", r["href"])
-            content = fetch_page_content(r["href"])
-            print("Content length:", len(content))
-            processed_results.append({
-        "title": r["title"],
-        "link": r["href"],
-        "content": content
-    })
-
-    return processed_results
-
-
-def web_search(query):
-    print("Performing 2nd version websearch:")
-
-
-    results = []
-    processed_results = []
-
-    with DDGS() as ddgs:
-        results = list(ddgs.text(query, max_results=5))
-
-    for r in results:
-        print("RAW RESULT:", r)
-
-        url = r.get("href") or r.get("link")
-        if not url:
-            continue
-
-        scored_results = []
-
-        for r in results:
-            s = score_result(r, query)
-            print("link:",r.get("href"),"score:",s)
-            scored_results.append((s, r))
-
-        # sort by score descending
-        scored_results.sort(reverse=True, key=lambda x: x[0])
-
-        processed_results = []
-
-        for score, r in scored_results[:2]:
-            url = r.get("href") or r.get("link")
-
-            print("Fetching:", url, "Score:", score)
-
-            content = fetch_page_content(url)
-
-            if content:
-                processed_results.append({
-            "title": r.get("title", ""),
-            "link": url,
-            "content": content
-        })
-    return processed_results'''
-
-
-from ddgs import DDGS
-import requests
-from bs4 import BeautifulSoup
-
-
 def score_result(r, query):
     score = 0
 
@@ -136,28 +37,28 @@ def score_result(r, query):
     text = title + " " + body
     query_words = query.lower().split()
 
-    # 🔹 keyword match
+    #  keyword match
     for word in query_words:
         if word in text:
             score += 2
 
-    # 🔹 trusted domains (soft boost)
+    #  domains (soft boost)
     if any(site in url for site in ["espn", "sofascore", "livescore", "premierleague"]):
         score += 3
 
-    # 🔹 penalize junk
+    # penalize junk
     if any(bad in url for bad in ["blog", "news", "transfer", "rumor"]):
         score -= 2
 
-    # 🔹 boost structured words
+    # boost structured words
     if any(word in text for word in ["fixture", "schedule", "next match", "date"]):
         score += 3
 
-    # 🔹 numbers (dates/times)
+    # numbers (dates/times)
     if any(char.isdigit() for char in text):
         score += 2
 
-    # 🔹 penalize blocked sites (optional but useful)
+    # penalize blocked sites (optional but useful)
     if "sofascore" in url:
         score -= 3
 
@@ -170,7 +71,7 @@ def web_search(query):
     with DDGS() as ddgs:
         results = list(ddgs.text(query, max_results=5))
 
-    # 🔹 STEP 1: Score results
+    # STEP 1: Score results
     scored_results = []
     for r in results:
         s = score_result(r, query)
@@ -178,10 +79,10 @@ def web_search(query):
         print(f"Score: {s} | URL: {url}")
         scored_results.append((s, r))
 
-    # 🔹 STEP 2: Sort by score (highest first)
+    # STEP 2: Sort by score (highest first)
     scored_results.sort(reverse=True, key=lambda x: x[0])
 
-    # 🔹 STEP 3: Fetch top valid results
+    #  STEP 3: Fetch top valid results
     visited_urls = set()
     processed_results = []
 
@@ -191,7 +92,7 @@ def web_search(query):
         if not url:
             continue
 
-        # 🔥 avoid duplicate fetch
+        # avoid duplicate fetch
         if url in visited_urls:
             continue
 
@@ -212,7 +113,7 @@ def web_search(query):
                 "content": content
             })
 
-        # 🔥 stop after 2 good results
+        #  stop after 2 good results
         if len(processed_results) == 2:
             break
     

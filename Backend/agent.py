@@ -3,9 +3,6 @@ from Backend.tools.web_search import web_search
 import json
 import ollama
 import re
-from datetime import datetime
-import pytz
-
 
 class Agent:
 
@@ -34,13 +31,6 @@ class Agent:
         elif len(clean.split()) <= 1:
             return "Can you tell me a bit more about what you're looking for?"
         
-        print("IS TIME QUERY:", self.is_time_query(input))
-        if self.is_time_query(input):
-            print("TIME FUNCTION CALLED")
-            result = self.get_time_for_location(input)
-            if result:
-                return result
-
 
         scratchpad = ""
 
@@ -435,81 +425,6 @@ RETURN ONLY THE FINAL ANSWER
         if len(self.history)>self.max_history:
             self.history.pop(0)
 
-
-    def is_time_query(self, query):
-        query = query.lower()
-
-        time_words = ["time", "date"]
-        location_words = ["in", "at"]  # key signal
-
-        return (
-        any(word in query for word in time_words)
-        and any(loc in query for loc in location_words)
-    )
-
-    def get_time_for_location(self, query):
-        query = query.lower()
-
-        tz = None  # always initialize
-
-        # basic mapping
-        if "hyderabad" in query or "india" in query:
-            tz = pytz.timezone("Asia/Kolkata")
-
-        elif "london" in query or "uk" in query:
-            tz = pytz.timezone("Europe/London")
-
-        elif "new york" in query or "usa" in query:
-            tz = pytz.timezone("America/New_York")
-
-        # fallback if unknown location
-        if tz is None:
-            print("tz is none, heading back to the agent")
-            return None
-
-        now = datetime.now(tz)
-
-        if "time" in query and "date" in query:
-            return now.strftime("%I:%M %p, %A, %B %d, %Y")
-
-        elif "time" in query:
-            return now.strftime("%I:%M %p")
-
-        elif "date" in query:
-            return now.strftime("%A, %B %d, %Y")
-        return None
-
-
-    def is_future_date(self, text):
-        # patterns to extract date
-        print("Checking date...")
-        patterns = [
-            r"\d{1,2} \w+ \d{4}",      # 13 April 2026
-            r"\w+ \d{1,2}, \d{4}",     # December 26, 2025
-            r"\d{1,2} \w{3} \d{4}",    # 01 Apr 2026
-            r"\w{3} \d{1,2}, \d{4}"    # Apr 01, 2026
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, text)
-            if match:
-                date_str = match.group()
-
-                formats = [
-                    "%d %B %Y",
-                    "%B %d, %Y",
-                    "%d %b %Y",
-                    "%b %d, %Y"
-                ]
-
-                for fmt in formats:
-                    try:
-                        date_obj = datetime.strptime(date_str, fmt)
-                        return date_obj > datetime.now()
-                    except:
-                        continue
-
-        return True  # fallback
     
     def is_useful_result(self, query, result):
         print("Checking whether the result is useful or not...")
