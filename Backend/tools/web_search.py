@@ -28,8 +28,8 @@ def fetch_page_content(url):
 
 
 def score_result(r, query):
+    print("Ranking the web results based on relevance..")
     score = 0
-
     url = (r.get("href") or r.get("link") or "").lower()
     title = r.get("title", "").lower()
     body = r.get("body", "").lower()

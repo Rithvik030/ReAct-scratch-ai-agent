@@ -14,6 +14,7 @@ class Agent:
 
     def run(self, input):
         # input validation
+        print("Running Agent..")
         retry_count = 0
         max_retries = 2
         clean = input.strip()
@@ -115,7 +116,7 @@ Step:
 
     def decide_action(self, query, scratch_pad):
 
-        print("Calling LLM")
+        print("deciding next step..")
         prompt = f"""
 You are an AI agent that decides actions.
 
