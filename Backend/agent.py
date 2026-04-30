@@ -3,6 +3,9 @@ from Backend.tools.web_search import web_search
 import json
 import ollama
 import re
+import os
+MODEL=os.getenv("MODEL_NAME",'gemma3:4b')
+print(f"Using model:{MODEL}")
 
 class Agent:
 
@@ -225,7 +228,7 @@ memory:
 {json.dumps(self.history, indent=2)}
 """
         response = ollama.chat(
-            model="gemma3:4b", messages=[{"role": "user", "content": prompt}]
+            model=MODEL, messages=[{"role": "user", "content": prompt}]
         )
 
         output = response["message"]["content"]
@@ -311,7 +314,7 @@ RULES:
 """
 
         response = ollama.chat(
-            model="gemma3:4b",
+            model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             options={"num_predict": 120, "temperature": 0.2},
         )
@@ -408,7 +411,7 @@ REASONING RULE:
 RETURN ONLY THE FINAL ANSWER
 """
         response = ollama.chat(
-            model="gemma3:4b",
+            model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             options={"temperature": 0},
         )
@@ -445,7 +448,7 @@ YES or NO
 """
 
         response = ollama.chat(
-        model="gemma3:4b",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         options={"temperature": 0}
     )
@@ -468,7 +471,7 @@ Only output the improved query.
 """
 
         response = ollama.chat(
-        model="gemma3:4b",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         options={"temperature": 0.3}
     )
@@ -496,7 +499,7 @@ YES or NO
 """
 
         response = ollama.chat(
-        model="gemma3:4b",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         options={"temperature": 0}
     )

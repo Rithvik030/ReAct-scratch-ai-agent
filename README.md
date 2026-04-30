@@ -145,12 +145,41 @@ agent_project/
 - Python 3.x  
 - Ollama installed and running  
 
-Run:
+---
 
-ollama run <model_name>
+### Model Setup
 
-Replace `<model_name>` with any model available in your Ollama setup.
+By default, the agent uses:
 
+  gemma3:4b
+
+If you are using this model locally, make sure to pull it first:
+
+  ollama pull gemma3:4b
+
+---
+
+### Using a Different Model (
+
+You can override the default model using an environment variable.
+
+Windows (CMD):
+
+  set MODEL_NAME=your_model_name
+
+---
+
+### Important
+
+- If you set a different **local model**, you must pull it before running:
+
+    ollama pull your_model_name
+
+- If you use a **cloud model** (e.g., gemma4:31b-cloud), no pull is required
+
+- If `MODEL_NAME` is not set, the default `gemma3:4b` will be used
+
+To explore available local and cloud models, refer to the Ollama website: https://ollama.com/library
 
 ---
 
