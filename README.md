@@ -1,7 +1,8 @@
 # MyAgent
 ## Overview
-This project is a custom-built ReAct-style AI agent developed from scratch
-It solves user queries using step-by-step reasoning, tool usage, and iterative self-correction.
+This project is an AI agent that answers user queries by combining reasoning, web search, and tool usage instead of relying on direct LLM responses.
+
+It is a custom-built ReAct-style AI agent developed from scratch that solves queries using step-by-step reasoning, tool usage, and iterative self-correction.
 
 Instead of generating answers directly, the agent dynamically decides what actions to take (e.g., web search or calculation), evaluates results, and refines its approach before producing a final answer.
 
@@ -131,7 +132,7 @@ agent_project/
 ## Tech Stack
 
 - Python  
-- Local LLM via Ollama (Gemma 3 4B)  
+- Local LLM via Ollama 
 - requests, BeautifulSoup  
 - DuckDuckGo Search  
 - Streamlit  
