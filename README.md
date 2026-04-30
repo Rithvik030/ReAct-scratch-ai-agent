@@ -159,7 +159,7 @@ If you are using this model locally, make sure to pull it first:
 
 ---
 
-### Using a Different Model (
+### Using a Different Model (optional)
 
 You can override the default model using an environment variable.
 
