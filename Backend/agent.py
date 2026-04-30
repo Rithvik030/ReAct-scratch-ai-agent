@@ -67,9 +67,6 @@ class Agent:
                 if action=="web_search":
                     print("Summarising Observation:")
                     result=self.summarize_observation(tool_input, result)
-                    if "next" in input.lower():
-                        if not self.is_future_date(result):
-                            result = "No useful information found."
                 
                 print("Displaying Tool Result:",result)
 
