@@ -4,58 +4,82 @@ import json
 import ollama
 import re
 import os
-MODEL=os.getenv("MODEL_NAME",'gemma3:4b')
+MODEL=os.getenv("MODEL_NAME",'gemma4:31b-cloud')
 print(f"Using model:{MODEL}")
+
 
 class Agent:
 
     def __init__(self):
         self.tools = {"calculator": calculate, "web_search": web_search}
-        self.history=[]
-        self.max_history=15
+        self.history = []
+        self.max_history = 15
         self.failed_queries = set()
+        self.state = {
+            "requirements": [],
+            "facts": []
+        }
+        self.requirements = {}
 
     def run(self, input):
-        # input validation
-        print("Running Agent..")
-        retry_count = 0
-        max_retries = 2
+        self.fresh_fetched = False
         clean = input.strip()
 
         if not clean:
             return "Please provide a valid question."
 
-        if clean.lower() in ["hi", "hey", "hello"] or clean.lower().startswith(("+","-","*","/","%",".",",")):
+        if clean.lower() in ["hi", "hey", "hello"]:
             return "Hey! How can I help you?"
 
-        # math expression detection
         if re.fullmatch(r"[0-9+\-*/(). ]+", clean):
-            pass  # allow it to go to agent
+            pass
 
         elif len(clean.split()) <= 1:
-            return "Can you tell me a bit more about what you're looking for?"
-        
+            return f"{clean}? Can you tell me more?"
+
+        print("Resetting agent state..")
+        self.state = {
+            "requirements": [],
+            "facts": []
+        }
+
+        print("Running Agent..")
+
+        self.plan = self.build_plan(input)
+        self.plan_idx = 0
+
+        self.state["requirements"] = self.extract_requirements(input)
+
+        print("Requirements:", self.state["requirements"])
 
         scratchpad = ""
+        retry_count = 0
+        max_retries = 2
 
-        for step in range(6):
-            decision = self.decide_action(input,scratchpad)
-            print("Decision made, Proceeding to action...")
+        for step in range(10):
+
+            print("\n--- LOOP STEP ---")
+            print("Scratchpad:", scratchpad)
+
+            # MAIN REASONER
+            decision = self.decide_action(input, scratchpad)
+
             action = decision["action"]
             tool_input = decision["input"]
 
-            
-            if action in ["calculator", "final_answer"]:
-                is_complete = self.is_query_complete(input, scratchpad)
+            if action == "web_search" and self.plan_idx < len(self.plan):
+                self.plan_idx += 1
 
-                if not is_complete:
-                    print("Incomplete data — forcing more search")
-                    action = "web_search"
-                    tool_input = input
+            print(f"Action: {action} | Input: {tool_input}")
+
+            # Stop if reasoner decides
+            if action == "final_answer":
+                return self.generate_final_answer(input, scratchpad)
 
             if tool_input in self.failed_queries:
                 print("Skipping repeated failed query")
                 continue
+
 
             if action == "final_answer":
                 print("Generating Final Answer...")
@@ -77,15 +101,55 @@ class Agent:
             #storing the observation of the current step
             #bad_signals = ["No useful information found.", "Access Denied"]
             print("Checking the usefulness of the tools..")
+
+            # TOOL EXECUTION
             if action == "calculator":
-                is_useful = True
+                print("Executing calculator with input from reasoner...")
+                try:
+                    result = calculate(tool_input)
+                except Exception:
+                    result = "Invalid calculation."
 
             elif action == "web_search":
-                is_useful = self.is_useful_result(tool_input, result)
+                print("Running tool: web_search")
+                result = web_search(tool_input)
+                
+
+                print("Summarising Observation:")
+                self.fresh_fetched = True
+                result = self.summarize_observation(tool_input, result)
 
             else:
-                is_useful = False
+                result = "Unsupported action."
 
+            print("Result:", result)
+
+            # requirement status update
+            for req in self.state["requirements"]:
+
+                if req["answered"]:
+                    continue
+
+                satisfied = self.is_requirement_answered(req, result)
+
+                if satisfied:
+
+                    req["answered"] = True
+                    req["answer"] = result
+
+                    print(f"Requirement satisfied: {req['id']}")
+
+            # store facts
+            self.state["facts"].append(result)
+            print("State:", self.state)
+
+            # usefulness check
+            if action == "calculator":
+                is_useful = True
+            elif action == "web_search":
+                is_useful = self.is_useful_result(tool_input, result)
+            else:
+                is_useful = False
 
             observation = f"""
 Step:
@@ -94,25 +158,26 @@ Step:
 - Result: {result}
 - Status: {"useful" if is_useful else "not useful"}
 """
-            #checking for failed query if any from observation
+
             if not is_useful:
-                print("The current query didn't give a useful answer.")
                 self.failed_queries.add(tool_input)
 
                 if retry_count < max_retries:
                     improved_query = self.generate_better_query(input, scratchpad)
-
-                    print("Retrying with improved query:", improved_query)
-
-                    input = improved_query   # feed back into loop
+                    input = improved_query
                     retry_count += 1
                     continue
 
-            #updating the scratchpad memory and printing
-            scratchpad +=observation
-            print("Scratchpad memory:", scratchpad)
-            #updating History
-            self.update_history({"query":tool_input,"result":result})
+            scratchpad += observation
+            self.update_history({"query": tool_input, "result": result})
+
+            #  EARLY STOPPING
+            '''if self.is_query_complete(input, scratchpad):
+                print("Early stop → answer found")
+                return self.generate_final_answer(input, scratchpad)'''
+
+        return "Could not find sufficient information."
+
 
     def decide_action(self, query, scratch_pad):
 
@@ -136,6 +201,7 @@ Guidelines:
 1. Understand the query deeply:
    - Identify exactly what is being asked
    - Identify ALL required pieces of information
+
 
 2. Tool usage:
    - calculator → for math or comparisons
@@ -205,6 +271,27 @@ Guidelines:
   → (Iceland / Canada) * 100
 
 - NEVER reverse numerator and denominator
+
+12. REQUIREMENT-FOCUSED EXECUTION (CRITICAL):
+
+- Carefully examine the requirements state
+- Identify which requirements are already answered
+- Focus ONLY on unresolved requirements
+- Choose ONE unresolved requirement at a time
+- Your next action must directly help solve that requirement
+- Do NOT jump randomly between unrelated tasks
+- Do NOT attempt to solve the entire query at once
+
+Examples:
+
+If:
+- norway_population = answered
+- tottenham_next_match = unanswered
+
+Then:
+→ your next action MUST focus on Tottenham only
+
+Do NOT search Norway again.
 ----
 
  History Usage Rules:
@@ -226,9 +313,13 @@ Previous steps:
 
 memory:
 {json.dumps(self.history, indent=2)}
+
+Requirements state:
+{json.dumps(self.state["requirements"], indent=2)}
 """
         response = ollama.chat(
             model=MODEL, messages=[{"role": "user", "content": prompt}]
+
         )
 
         output = response["message"]["content"]
@@ -429,6 +520,24 @@ RETURN ONLY THE FINAL ANSWER
     
     def is_useful_result(self, query, result):
         print("Checking whether the result is useful or not...")
+
+        # basic sanity check
+        if not result or result.strip() == "":
+            return False
+
+        # reject obvious garbage
+        bad_signals = [
+    "no useful information",
+    "access denied",
+    "error",
+]
+
+        if any(bad in result.lower() for bad in bad_signals):
+            return False
+        
+        if any(char.isdigit() for char in result):
+            return True
+
         prompt = f"""
 User query:
 {query}
@@ -436,12 +545,13 @@ User query:
 Result:
 {result}
 
-Does this result directly and completely answer the query?
+Does this result help answer the query?
 
 Rules:
-- Must answer ALL parts of the query
-- Must be specific (no vague words like "soon", "upcoming")
-- Must not be generic or partial
+- If the result contains relevant facts → YES
+- If it partially answers the query → YES
+- If it includes useful data (numbers, names, entities) → YES
+- Only say NO if it is completely irrelevant or empty
 
 Respond ONLY with:
 YES or NO
@@ -452,8 +562,8 @@ YES or NO
         messages=[{"role": "user", "content": prompt}],
         options={"temperature": 0}
     )
-        return "YES" in response["message"]["content"].upper()
 
+        return "YES" in response["message"]["content"].upper()
 
     def generate_better_query(self, query, scratchpad):
         print("Refining input query...")
@@ -486,13 +596,16 @@ User query:
 Current known information:
 {scratchpad}
 
-Check if ALL required information to answer the query is present.
+Can the agent already answer the query using the available information?
 
 Rules:
-- Identify all entities and required values in the query
-- Check if each one is present in the scratchpad
-- If ANY required piece is missing → answer NO
-- Only answer YES if everything needed is available
+- If the answer can be directly computed or inferred → YES
+- If required values (numbers/facts) are present → YES
+- If calculation has already been performed → YES
+- Even if answer is in natural language → YES
+- Only say NO if critical data is missing
+
+
 
 Respond ONLY with:
 YES or NO
@@ -504,3 +617,318 @@ YES or NO
         options={"temperature": 0}
     )
         return response["message"]["content"].strip().upper().startswith("YES")
+    
+    def extract_requirements(self, query):
+
+        print("Extracting requirements..")
+
+        prompt = f"""
+Extract the ACTUAL information requirements from the user query.
+
+Query:
+{query}
+
+Return STRICT JSON ONLY.
+
+Format:
+
+[
+  {{
+    "id": "requirement_id",
+    "entity": "entity_name",
+    "metric": "metric_name"
+  }}
+]
+
+Examples:
+
+Query:
+"What is the population of Norway?"
+
+Output:
+[
+  {{
+    "id": "norway_population",
+    "entity": "norway",
+    "metric": "population"
+  }}
+]
+
+Query:
+"What is the next Tottenham game and population of Norway?"
+
+Output:
+[
+  {{
+    "id": "tottenham_next_match",
+    "entity": "tottenham",
+    "metric": "next_match"
+  }},
+  {{
+    "id": "norway_population",
+    "entity": "norway",
+    "metric": "population"
+  }}
+]
+"""
+
+        response = ollama.chat(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        options={"temperature": 0}
+    )
+
+        output = response["message"]["content"]
+
+        print("LLM raw response (requirements):", output)
+
+        output = output.replace("```json", "").replace("```", "").strip()
+
+        try:
+            parsed = json.loads(output)
+
+            structured = []
+
+            for req in parsed:
+
+                structured.append({
+                "id": req.get("id", ""),
+                "entity": req.get("entity", ""),
+                "metric": req.get("metric", ""),
+                "answered": False,
+                "answer": None
+            })
+
+            return structured
+
+        except Exception as e:
+            print("Requirement extraction failed:", e)
+
+        return []
+
+    
+    def is_requirement_satisfied(self):
+
+        req_entities = self.requirements.get("entities", [])
+
+        for ent in req_entities:
+            if ent not in self.state["entities"]:
+                return False
+
+        return True
+    
+    def extract_entities_llm(self, query):
+        print("extract llm entities")
+        prompt = f"""
+    Extract ONLY the main real-world entities from this query.
+
+    Query:
+    {query}
+
+    Return JSON:
+    {{"entities": ["entity1", "entity2"]}}
+
+    Rules:
+    - Only include real entities (countries, cities, organizations)
+    - Do NOT include verbs or generic words
+    - Do NOT include metrics (like population, GDP, etc.)
+    - Keep it minimal (max 3 entities)
+    """
+
+        response = ollama.chat(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        output = response["message"]["content"]
+        print("LLM raw response (entities):", output)
+
+        output = output.replace("```json", "").replace("```", "").strip()
+
+        try:
+            parsed = json.loads(output)
+            return [e.lower().strip() for e in parsed.get("entities", [])]
+        except:
+            return []
+        
+    
+    def is_requirement_answered(self, requirement, result):
+
+        print(f"Checking requirement: {requirement['id']}")
+
+        if not result or result.strip() == "":
+            return False
+
+        bad_signals = [
+            "no useful information",
+            "access denied",
+            "error"
+        ]
+
+        if any(bad in result.lower() for bad in bad_signals):
+            return False
+
+        prompt = f"""
+    Requirement:
+    Entity: {requirement["entity"]}
+    Metric: {requirement["metric"]}
+
+    Result:
+    {result}
+
+    Does this result DIRECTLY and SPECIFICALLY answer this requirement?
+
+    Rules:
+
+    - The result must answer THIS exact requirement
+    - Related information is NOT enough
+    - General descriptions are NOT enough
+    - Partial matches are NOT enough
+    - If the exact answer is present → YES
+    - Otherwise → NO
+
+    Examples:
+
+    Requirement:
+    Entity: norway
+    Metric: population
+
+    Result:
+    "The population of Norway is 5.6 million."
+
+    Answer:
+    YES
+
+    ---
+
+    Requirement:
+    Entity: norway
+    Metric: population
+
+    Result:
+    "Norway is a Nordic country."
+
+    Answer:
+    NO
+
+    Respond ONLY:
+    YES or NO
+    """
+
+        response = ollama.chat(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0}
+        )
+
+        answer = response["message"]["content"].strip().upper()
+
+        return answer.startswith("YES")
+    
+
+    def build_plan(self, query):
+        
+        print("Building a plan...")
+        prompt = f"""
+You are a planning engine.
+
+Convert the user query into a structured execution plan.
+
+User Query:
+{query}
+
+Return STRICT JSON ONLY (no explanation):
+
+{{
+  "steps": [
+    {{"type": "fetch", "entity": "entity_name", "metric": "metric_name"}},
+    {{"type": "compute", "operation": "operation_name", "args": ["arg1", "arg2"]}}
+  ]
+}}
+
+Rules:
+
+1. Allowed step types:
+   - "fetch": retrieve data
+   - "compute": perform calculation
+
+2. For "fetch":
+   - MUST include: entity, metric
+   - metric = what data is needed (e.g., population, gdp, ceo)
+
+3. For "compute":
+   - MUST include: operation, args
+   - args MUST reference fetched entities EXACTLY
+   - DO NOT invent variables
+
+4. Supported operations:
+   - "percentage"
+   - "difference"
+   - "sum"
+   - "average"
+   - "comparison"
+
+5. Ordering:
+   - ALL fetch steps MUST come BEFORE compute
+   - No duplicate steps
+
+6. Keep steps minimal:
+   - Do not add unnecessary steps
+   - Only include what is needed
+
+7. Output format rules:
+   - JSON only
+   - No markdown
+   - No explanation
+   - No text before or after JSON
+
+---
+
+Examples:
+
+Query:
+"What is the population of India?"
+
+Output:
+{{
+  "steps": [
+    {{"type": "fetch", "entity": "india", "metric": "population"}}
+  ]
+}}
+
+Query:
+"What % of India's population is China's?"
+
+Output:
+{{
+  "steps": [
+    {{"type": "fetch", "entity": "india", "metric": "population"}},
+    {{"type": "fetch", "entity": "china", "metric": "population"}},
+    {{"type": "compute", "operation": "percentage", "args": ["china", "india"]}}
+  ]
+}}
+
+Query:
+"Which country has higher GDP, India or China?"
+
+Output:
+{{
+  "steps": [
+    {{"type": "fetch", "entity": "india", "metric": "gdp"}},
+    {{"type": "fetch", "entity": "china", "metric": "gdp"}},
+    {{"type": "compute", "operation": "comparison", "args": ["india", "china"]}}
+  ]
+}}
+"""
+        response = ollama.chat(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+        text = response["message"]["content"]
+        text = text.replace("```json", "").replace("```", "").strip()
+
+        try:
+            return json.loads(text).get("steps", [])
+        except:
+            return []
