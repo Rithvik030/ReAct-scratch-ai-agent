@@ -1,221 +1,328 @@
 # MyAgent
+
 ## Overview
-This project is an AI agent that answers user queries by combining reasoning, web search, and tool usage instead of relying on direct LLM responses.
 
-It is a custom-built ReAct-style AI agent developed from scratch that solves queries using step-by-step reasoning, tool usage, and iterative self-correction.
+MyAgent is a custom-built AI workflow agent that answers user queries through iterative reasoning, tool orchestration, requirement tracking, and validation instead of relying solely on direct LLM responses.
 
-Instead of generating answers directly, the agent dynamically decides what actions to take (e.g., web search or calculation), evaluates results, and refines its approach before producing a final answer.
+The system decomposes user queries into information requirements, dynamically decides which actions to take, gathers information through tools, validates results, and continues reasoning until sufficient information is collected to answer the request.
+
+The project was built from scratch to explore agent architectures, retrieval workflows, multi-step reasoning, and autonomous decision-making systems.
+
+---
+
+## Core Idea
+
+Instead of attempting to answer an entire query at once, the agent first extracts the underlying information requirements and solves them individually before generating a final answer.
+
+### Example
+
+User Query:
+
+> What is the next Tottenham match and the population of Norway?
+
+Extracted Requirements:
+
+- Tottenham → next match
+- Norway → population
+
+The agent then focuses on solving each requirement before synthesizing a final response.
 
 ---
 
 ## Features
 
-- ReAct-style reasoning loop (Reason → Act → Observe)
-- Web search with custom retrieval pipeline
-- Calculator tool for numerical reasoning
-- Adaptive query refinement (self-correction after failures)
-- Semantic usefulness evaluation to filter poor results
-- Completion check to ensure all required information is gathered
-- Scratchpad memory for step-by-step reasoning tracking
-- Basic Streamlit UI for interaction
+### Requirement Extraction
+
+The agent identifies the actual information requirements hidden within a query before attempting to solve it.
+
+Example:
+
+User Query:
+
+> What is the difference between the population of Norway and Sweden?
+
+Extracted Requirements:
+
+- Norway → population
+- Sweden → population
 
 ---
 
-## What is ReAct?
+### Requirement-Aware Execution
 
-ReAct stands for:
+The agent tracks which requirements have already been satisfied and focuses only on unresolved requirements.
 
-> **Reason + Act**
+Benefits:
 
-The agent follows an iterative loop:
-
-1. **Reason** → Decide what to do next  
-2. **Act** → Use a tool (web search / calculator)  
-3. **Observe** → Analyze the result  
-4. **Repeat** → Continue until enough information is gathered  
-
-This enables:
-- multi-step reasoning  
-- dynamic decision-making  
-- error recovery  
+- Reduces redundant searches
+- Improves efficiency
+- Enables multi-step workflows
 
 ---
 
-## How It Works
+### ReAct-Inspired Reasoning Loop
 
-```bash
+The execution engine follows a ReAct-style workflow:
+
+1. Reason
+2. Act
+3. Observe
+4. Repeat
+
+Rather than answering immediately, the agent iteratively gathers information until enough evidence exists to answer the query.
+
+---
+
+### Tool Orchestration
+
+The agent dynamically selects tools based on the task.
+
+Available tools:
+
+- Web Search
+- Calculator
+
+---
+
+### Self-Correction
+
+If retrieval results are poor or irrelevant, the agent attempts to generate improved search queries and retry before giving up.
+
+---
+
+### Retrieval Validation
+
+The system evaluates retrieved information before accepting it.
+
+It attempts to reject:
+
+- Navigation pages
+- Irrelevant content
+- Incomplete information
+- Low-quality results
+
+---
+
+### State Tracking
+
+The agent maintains internal state including:
+
+- Requirements
+- Collected facts
+- Conversation history
+- Failed queries
+
+This enables multi-step reasoning and workflow execution.
+
+---
+
+## System Architecture
+
+```text
 User Query
-↓
-Decide Action (LLM)
-↓
-Tool Execution (Web Search / Calculator)
-↓
-Summarize Result
-↓
-Usefulness Check
-↓
-Completion Check
-↓
-Retry (if needed)
-↓
-Final Answer
-
+    │
+    ▼
+Requirement Extraction
+    │
+    ▼
+Requirement Tracking
+    │
+    ▼
+Decide Next Action
+    │
+ ┌──┴───────────┐
+ │              │
+ ▼              ▼
+Web Search   Calculator
+ │              │
+ └──────┬───────┘
+        │
+        ▼
+Result Validation
+        │
+        ▼
+State Update
+        │
+        ▼
+Query Complete?
+     │      │
+     │ No   │ Yes
+     ▼      ▼
+ Continue  Final Answer
 ```
 
 ---
 
-## Example
+## Example Workflow
 
-Ask: what is current population of india
+Query:
 
-Agent:
-- Action: web_search  
-- Input: current population of india  
-- Result: 1,472,766,344  
+> What is the difference between the population of Norway and Sweden?
 
-Final Answer: 1,472,766,344
+Execution:
+
+1. Extract requirements
+   - Norway population
+   - Sweden population
+
+2. Retrieve Norway population
+
+3. Retrieve Sweden population
+
+4. Perform calculation
+
+5. Generate final answer
 
 ---
-
-Ask: what percentage of indian population is population of pakistan
-
-Agent:
-- Action: web_search → population of Pakistan  
-- Result: 249,131,050  
-
-- Action: calculator  
-- Input: 249131050 / 1472766344 * 100  
-- Result: 16.91  
-
-Final Answer: 16.92%
 
 ## Retrieval Pipeline
 
-- Uses `requests` to fetch web data  
-- Uses `BeautifulSoup` to parse and extract content  
-- Applies manual reranking based on query relevance  
-- Summarizes results for cleaner reasoning  
+The web retrieval system includes:
+
+- DuckDuckGo Search
+- Domain-aware retrieval
+- Query categorization
+- Content extraction
+- Result ranking
+- Summarization
+- Validation
 
 ---
 
-## Self-Correction Mechanism
+## Project Structure
 
-If results are not useful:
-- The agent refines the query  
-- Retries with improved input  
-- Continues until meaningful information is found  
-
----
-
-## 📁 Project Structure
-
-```bash
-agent_project/
+```text
+Agent_plat/
 │
 ├── Backend/
 │   ├── agent.py
+│   ├── main.py
+│   │
 │   └── tools/
-│       ├── web_search.py
-│       └── calculator.py
+│       ├── calculator.py
+│       └── web_search.py
 │
 ├── Frontend/
 │   └── app.py
 │
 ├── cli_test.py
-├── README.md
-└── requirements.txt
+├── requirements.txt
+└── README.md
 ```
-
 
 ---
 
 ## Tech Stack
 
-- Python  
-- Local LLM via Ollama 
-- requests, BeautifulSoup  
-- DuckDuckGo Search  
-- Streamlit  
+- Python
+- Ollama
+- FastAPI
+- Streamlit
+- DuckDuckGo Search
+- Requests
+- BeautifulSoup
 
 ---
 
-## Setup
-
-### Requirements
-- Python 3.x  
-- Ollama installed and running  
-
----
-
-### Model Setup
+## Model Setup
 
 By default, the agent uses:
 
-  gemma3:4b
+```text
+gemma3:4b
+```
 
-If you are using this model locally, make sure to pull it first:
+Pull the model before running:
 
-  ollama pull gemma3:4b
+```bash
+ollama pull gemma3:4b
+```
 
----
-
-### Using a Different Model (optional)
+### Using a Different Model
 
 You can override the default model using an environment variable.
 
 Windows (CMD):
 
-  set MODEL_NAME=your_model_name
+```cmd
+set MODEL_NAME=your_model_name
+```
 
----
+Windows (PowerShell):
+
+```powershell
+$env:MODEL_NAME="your_model_name"
+```
 
 ### Important
 
-- If you set a different **local model**, you must pull it before running:
+If you use a different local model, pull it before running:
 
-    ollama pull your_model_name
+```bash
+ollama pull your_model_name
+```
 
-- If you use a **cloud model** (e.g., gemma4:31b-cloud), no pull is required
+If `MODEL_NAME` is not set, the default model will be used:
 
-- If `MODEL_NAME` is not set, the default `gemma3:4b` will be used
+```text
+gemma3:4b
+```
 
-To explore available local and cloud models, refer to the Ollama website: https://ollama.com/library
+Available Ollama models:
+
+https://ollama.com/library
 
 ---
 
-##  Running the Project
+## Running the Project
 
-### CLI Mode (recommended)
+### Start Backend
 
+```bash
+uvicorn Backend.main:app --reload
+```
+
+### Start Frontend
+
+```bash
+streamlit run Frontend/app.py
+```
+
+### CLI Mode
+
+```bash
 python cli_test.py
-
-
-### Streamlit UI
-
-Start backend:
-
-uvicorn main:app --reload
-
-
-Start UI:
-
-streamlit run app.py
-
+```
 
 ---
 
-## Notes
+## Current Capabilities
 
-- The project focuses on reasoning and system design rather than direct answer generation  
-- Includes validation mechanisms to improve reliability  
-- Designed as a learning project to explore real-world of LLM-based agents  
+- Multi-step reasoning
+- Requirement extraction
+- Requirement-aware execution
+- Tool orchestration
+- Self-correction
+- Query refinement
+- Retrieval validation
+- State tracking
+- Numerical reasoning
 
 ---
 
 ## Future Improvements
 
-- Improve validation for edge cases  
-- Better memory filtering  
-- Add planning layer for structured tasks  
-- Improve time/date handling  
-- Expand tool capabilities  
+- Refactor and modularize the agent architecture
+- Improve requirement dependency handling
+- Improve stopping logic and answer sufficiency checks
+- Improve query categorization and routing
+- Reduce unnecessary tool calls and over-reasoning
+- Expand tool capabilities
+- Improve retrieval quality and validation
+- Explore Agentic RAG integration
+
+---
+
+## Purpose
+
+This project was built to explore how autonomous AI workflows can be designed from first principles, focusing on reasoning loops, retrieval orchestration, validation, and requirement-driven execution rather than simple prompt-response interactions.
